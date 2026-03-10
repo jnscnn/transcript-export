@@ -17,7 +17,7 @@ export interface SharePointConfig {
 }
 
 export interface AuthConfig {
-  clientId: string;
+  clientId?: string;  // Optional — defaults to Microsoft Graph PowerShell well-known client ID
   tenantId: string;
   tokenCachePath: string;
 }

@@ -10,6 +10,10 @@ import { dirname } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { AuthConfig } from './config.js';
 
+// Microsoft Graph PowerShell — first-party app pre-registered in every M365 tenant.
+// Supports device-code flow with all Graph delegated scopes. No app registration needed.
+const GRAPH_POWERSHELL_CLIENT_ID = '14d82eec-204b-4c2f-b7e8-296a70dab67e';
+
 const SCOPES = [
   'User.Read',
   'OnlineMeetings.Read',
@@ -24,7 +28,7 @@ const SCOPES = [
 async function buildMsalApp(config: AuthConfig): Promise<PublicClientApplication> {
   const pca = new PublicClientApplication({
     auth: {
-      clientId: config.clientId,
+      clientId: config.clientId ?? GRAPH_POWERSHELL_CLIENT_ID,
       authority: `https://login.microsoftonline.com/${config.tenantId}`,
     },
   });

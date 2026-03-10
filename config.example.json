@@ -1,7 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "auth": {
-    "clientId": "YOUR_APP_CLIENT_ID",
     "tenantId": "YOUR_TENANT_ID",
     "tokenCachePath": "~/.transcript-export/token-cache.json"
   },

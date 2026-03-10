@@ -24,38 +24,22 @@ Available for M365 Copilot, Azure AI Search, custom AI agents
 ## Prerequisites
 
 - **Node.js 20+**
-- **Entra ID (Azure AD) app registration** with delegated permissions:
-  - `User.Read`
-  - `OnlineMeetings.Read`
-  - `OnlineMeetingTranscript.Read.All`
-  - `Calendars.Read`
-  - `Sites.ReadWrite.All`
 - **Transcription enabled** on the target meetings (Teams meeting options or admin policy)
 - You must be the **organizer or participant** of the target meetings
 
-> **No admin consent required.** All permissions are delegated (user-level). You only need to register a personal app in the Azure portal — no tenant admin involvement.
+> **No app registration required.** This tool uses the Microsoft Graph PowerShell well-known client ID — a first-party Microsoft app pre-registered in every M365 tenant. Authentication uses device-code flow with your own M365 credentials.
 
 ## Setup
 
-### 1. Register an Entra ID App
-
-1. Go to [Azure Portal → App registrations](https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade)
-2. Click **New registration**
-3. Name: `transcript-export` (or any name)
-4. Supported account types: **Accounts in this organizational directory only**
-5. Redirect URI: **Public client/native** → `http://localhost`
-6. After registration, go to **API permissions** → Add the delegated permissions listed above
-7. Copy the **Application (client) ID** and **Directory (tenant) ID**
-
-### 2. Configure
+### 1. Configure
 
 ```bash
 cp config.example.json config.json
 ```
 
-Edit `config.json` with your app registration details, SharePoint site info, and target meetings.
+Edit `config.json` with your tenant ID, SharePoint site info, and target meetings. Your tenant ID is `72f988bf-86f1-41af-91ab-2d7cd011db47` for Microsoft corporate.
 
-### 3. Discover Meeting IDs
+### 2. Discover Meeting IDs
 
 ```bash
 npx tsx src/index.ts list-meetings -c config.json
@@ -63,7 +47,7 @@ npx tsx src/index.ts list-meetings -c config.json
 
 This lists your recent online meetings with their Graph API meeting IDs. Copy the IDs for the meetings you want to track into your `config.json`.
 
-### 4. Run
+### 3. Run
 
 ```bash
 # First run — will prompt for device-code authentication
@@ -83,7 +67,6 @@ See `config.example.json` for the full template. Key sections:
 ```jsonc
 {
   "auth": {
-    "clientId": "your-app-client-id",
     "tenantId": "your-tenant-id",
     "tokenCachePath": "~/.transcript-export/token-cache.json"
   },
