@@ -83,6 +83,20 @@ describe('toMarkdown', () => {
     expect(md).toContain('organizer: Jane Smith');
   });
 
+  it('should handle metadata without organizer', () => {
+    const entries = parseVTT(sampleVTT);
+    const minimalMeta: MeetingMetadata = {
+      subject: 'Quick Call',
+      startDateTime: '2026-03-10T10:00:00Z',
+    };
+    const md = toMarkdown(entries, minimalMeta);
+
+    expect(md).toContain('meeting: "Quick Call"');
+    expect(md).not.toContain('organizer:');
+    // Should use speakers as attendees when none provided
+    expect(md).toContain('Jane Smith');
+  });
+
   it('should include meeting header', () => {
     const entries = parseVTT(sampleVTT);
     const md = toMarkdown(entries, metadata);

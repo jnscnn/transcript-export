@@ -1,182 +1,92 @@
 #!/usr/bin/env node
 
 import { parseArgs } from 'node:util';
-import { loadConfig, loadWatermarks, saveWatermarks } from './config.js';
-import { getGraphClient } from './auth.js';
-import { listTranscripts, getTranscriptContent, getMeetingMetadata, uploadToSharePoint, listOnlineMeetings } from './graph.js';
-import { parseVTT, toMarkdown } from './parser.js';
+import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { mkdir } from 'node:fs/promises';
+import { watchInbox, processInbox } from './watcher.js';
+import { convertFile } from './converter.js';
 
 const { values, positionals } = parseArgs({
   options: {
-    config: { type: 'string', short: 'c', default: './config.json' },
-    silent: { type: 'boolean', short: 's', default: false },
-    'dry-run': { type: 'boolean', default: false },
+    inbox: { type: 'string', short: 'i' },
+    output: { type: 'string', short: 'o' },
+    file: { type: 'string', short: 'f' },
+    'no-move': { type: 'boolean', default: false },
     help: { type: 'boolean', short: 'h', default: false },
   },
   allowPositionals: true,
   strict: false,
 });
 
+const subcommand = positionals[0] ?? 'convert';
+
 if (values.help) {
   console.log(`
-transcript-export — Export Teams meeting transcripts to Markdown on SharePoint
+transcript-export — Convert Teams meeting transcripts to Markdown
 
 Usage:
-  transcript-export [options]                Process new transcripts
-  transcript-export list-meetings [options]  Show your online meetings with IDs
+  transcript-export watch    [options]  Watch inbox folder continuously
+  transcript-export convert  [options]  Process all pending files and exit
 
 Options:
-  -c, --config <path>  Config file path (default: ./config.json)
-  -s, --silent         Use cached auth only, don't prompt for login
-  --dry-run            Show what would be processed without uploading
-  -h, --help           Show this help
+  -i, --inbox <dir>     Inbox folder to watch/process (default: ./TranscriptInbox)
+  -o, --output <dir>    Output folder for Markdown files (default: ./Transcripts)
+  -f, --file <path>     Convert a single file (skip inbox)
+  --no-move             Don't move processed files to /processed/
+  -h, --help            Show this help
+
+Workflow:
+  1. Download transcript from Teams (click "..." → Download on the transcript)
+  2. Drop the .vtt or .docx file into the inbox folder
+  3. Run this tool (or leave it in watch mode)
+  4. Markdown output appears in the output folder
+  5. If output folder is in OneDrive, it auto-syncs to SharePoint
   `);
   process.exit(0);
 }
 
-const subcommand = positionals[0];
-
 async function main(): Promise<void> {
-  const configPath = values.config as string;
-  const silent = values.silent as boolean;
-  const dryRun = values['dry-run'] as boolean;
+  const inboxDir = resolve(values.inbox as string ?? './TranscriptInbox');
+  const outputDir = resolve(values.output as string ?? './Transcripts');
+  const moveProcessed = !(values['no-move'] as boolean);
 
-  if (subcommand === 'list-meetings') {
-    await handleListMeetings(configPath, silent);
+  // Ensure directories exist
+  await mkdir(inboxDir, { recursive: true });
+  await mkdir(outputDir, { recursive: true });
+
+  if (values.file) {
+    // Single file mode
+    const filePath = resolve(values.file as string);
+    if (!existsSync(filePath)) {
+      console.error(`❌ File not found: ${filePath}`);
+      process.exit(1);
+    }
+
+    console.log(`📝 Converting: ${filePath}\n`);
+    const result = await convertFile(filePath, outputDir);
+    console.log(`✅ ${result.meetingName} (${result.date})`);
+    console.log(`   ${result.entryCount} entries → ${result.outputFile}`);
     return;
   }
 
-  await handleProcessTranscripts(configPath, silent, dryRun);
-}
-
-async function handleListMeetings(configPath: string, silent: boolean): Promise<void> {
-  const config = await loadConfig(configPath);
-  const client = await getGraphClient(config.auth, silent);
-
-  console.log('📅 Your recent online meetings:\n');
-  const meetings = await listOnlineMeetings(client);
-
-  if (meetings.length === 0) {
-    console.log('  No online meetings found.');
-    return;
+  if (!existsSync(inboxDir)) {
+    console.error(`❌ Inbox folder not found: ${inboxDir}`);
+    process.exit(1);
   }
 
-  for (const m of meetings) {
-    console.log(`  📌 ${m.subject}`);
-    console.log(`     Organizer: ${m.organizer}`);
-    console.log(`     Meeting ID: ${m.meetingId}`);
-    console.log(`     Join URL: ${m.joinUrl}`);
-    console.log();
+  if (subcommand === 'watch') {
+    watchInbox(inboxDir, outputDir, { moveProcessed });
+    // Keep the process alive
+    process.on('SIGINT', () => {
+      console.log('\n👋 Stopping watcher.');
+      process.exit(0);
+    });
+  } else {
+    // One-shot convert mode
+    const count = await processInbox(inboxDir, outputDir, { moveProcessed });
+    console.log(`\n✨ Done: ${count} file(s) converted.`);
   }
-
-  console.log(`Found ${meetings.length} meeting(s). Copy the Meeting ID into your config.json.`);
-}
-
-async function handleProcessTranscripts(
-  configPath: string,
-  silent: boolean,
-  dryRun: boolean,
-): Promise<void> {
-  const config = await loadConfig(configPath);
-  const watermarks = await loadWatermarks(config.watermarkPath);
-  const client = await getGraphClient(config.auth, silent);
-
-  console.log(`🚀 Processing ${config.meetings.length} meeting(s)...`);
-  if (dryRun) console.log('   (dry run — no files will be uploaded)\n');
-
-  let totalProcessed = 0;
-  let totalSkipped = 0;
-  let totalFailed = 0;
-
-  for (const meeting of config.meetings) {
-    console.log(`\n📋 ${meeting.name}`);
-    const since = watermarks[meeting.meetingId];
-
-    const transcripts = await listTranscripts(
-      client,
-      meeting.organizerId,
-      meeting.meetingId,
-      since,
-    );
-
-    if (transcripts.length === 0) {
-      console.log('   No new transcripts.');
-      totalSkipped++;
-      continue;
-    }
-
-    console.log(`   Found ${transcripts.length} new transcript(s)`);
-
-    for (const transcript of transcripts) {
-      try {
-        console.log(`   📝 Transcript ${transcript.id} (${transcript.createdDateTime})`);
-
-        if (dryRun) {
-          console.log('      [dry run] Would fetch, parse, and upload');
-          totalProcessed++;
-          continue;
-        }
-
-        // Fetch VTT content
-        const vtt = await getTranscriptContent(
-          client,
-          meeting.organizerId,
-          meeting.meetingId,
-          transcript.id,
-        );
-
-        // Fetch meeting metadata
-        let metadata;
-        try {
-          metadata = await getMeetingMetadata(client, meeting.organizerId, meeting.meetingId);
-        } catch {
-          // Fallback metadata if we can't fetch
-          metadata = {
-            subject: meeting.name,
-            startDateTime: transcript.createdDateTime,
-            endDateTime: transcript.createdDateTime,
-            organizer: meeting.organizerId,
-            attendees: [],
-          };
-        }
-
-        // Parse VTT and generate Markdown
-        const entries = parseVTT(vtt);
-        const markdown = toMarkdown(entries, metadata);
-
-        // Build output file path
-        const date = new Date(transcript.createdDateTime).toISOString().split('T')[0];
-        const fileName = `${meeting.name.replace(/[^a-zA-Z0-9-_ ]/g, '')}_${date}.md`;
-        const filePath = `${config.sharepoint.basePath}/${meeting.outputFolder}/${fileName}`;
-
-        // Upload to SharePoint
-        await uploadToSharePoint(
-          client,
-          config.sharepoint.siteId,
-          config.sharepoint.driveId,
-          filePath,
-          markdown,
-        );
-
-        console.log(`      ✅ Uploaded: ${filePath}`);
-
-        // Update watermark
-        watermarks[meeting.meetingId] = transcript.createdDateTime;
-        totalProcessed++;
-      } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : String(error);
-        console.error(`      ❌ Failed: ${msg}`);
-        totalFailed++;
-      }
-    }
-  }
-
-  // Persist watermarks
-  if (!dryRun) {
-    await saveWatermarks(config.watermarkPath, watermarks);
-  }
-
-  console.log(`\n✨ Done: ${totalProcessed} processed, ${totalSkipped} skipped, ${totalFailed} failed`);
 }
 
 main().catch((err: Error) => {

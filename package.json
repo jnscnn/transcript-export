@@ -9,13 +9,12 @@
   "scripts": {
     "build": "tsc",
     "start": "tsx src/index.ts",
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx src/index.ts watch",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@azure/msal-node": "^2.16.0",
-    "@microsoft/microsoft-graph-client": "^3.0.7"
+    "mammoth": "^1.8.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

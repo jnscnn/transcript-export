@@ -7,9 +7,9 @@ export interface TranscriptEntry {
 export interface MeetingMetadata {
   subject: string;
   startDateTime: string;
-  endDateTime: string;
-  organizer: string;
-  attendees: string[];
+  endDateTime?: string;
+  organizer?: string;
+  attendees?: string[];
 }
 
 /**
@@ -80,32 +80,33 @@ export function toMarkdown(entries: TranscriptEntry[], meta: MeetingMetadata): s
   });
 
   const startTime = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-  const endTime = new Date(meta.endDateTime).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const endTime = meta.endDateTime
+    ? new Date(meta.endDateTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    : undefined;
 
   // Collect unique speakers
   const speakers = [...new Set(entries.map(e => e.speaker))];
+  const attendees = meta.attendees?.length ? meta.attendees : speakers;
 
   // YAML frontmatter
   const frontmatter = [
     '---',
     `meeting: "${meta.subject}"`,
     `date: ${dateStr}`,
-    `organizer: ${meta.organizer}`,
-    `attendees: [${meta.attendees.join(', ')}]`,
+    meta.organizer ? `organizer: ${meta.organizer}` : null,
+    `attendees: [${attendees.join(', ')}]`,
     `speakers: [${speakers.join(', ')}]`,
     '---',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
   // Header
+  const timeLine = endTime ? `${startTime} – ${endTime}` : startTime;
   const header = [
     `# ${meta.subject} — ${dateDisplay}`,
     '',
-    `**Date:** ${dateDisplay}, ${startTime} – ${endTime}`,
-    `**Organizer:** ${meta.organizer}`,
-    `**Attendees:** ${meta.attendees.join(', ')}`,
+    `**Date:** ${dateDisplay}, ${timeLine}`,
+    meta.organizer ? `**Organizer:** ${meta.organizer}` : null,
+    `**Attendees:** ${attendees.join(', ')}`,
     '',
     '---',
     '',

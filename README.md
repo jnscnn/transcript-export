@@ -1,142 +1,114 @@
 # transcript-export
 
-Export Microsoft Teams meeting transcripts to structured Markdown and upload to SharePoint — designed as a foundation for AI-powered workflows.
+Convert Teams meeting transcripts (.vtt / .docx) into structured Markdown with YAML frontmatter — designed as a foundation for AI-powered workflows.
 
 ## How It Works
 
-1. **Polls** the Microsoft Graph API for new transcripts on a set of configured recurring meetings
-2. **Parses** the WebVTT transcript into structured entries (speaker, timestamp, text)
-3. **Transforms** into Markdown with YAML frontmatter (machine-readable metadata for AI)
-4. **Uploads** the `.md` file to a SharePoint document library via Graph API
+1. **Download** a transcript from Teams after a meeting (~3 clicks)
+2. **Drop** the `.vtt` or `.docx` file into an inbox folder
+3. **Run** this tool (one-shot or continuous watch mode)
+4. **Markdown** output appears in the output folder with structured metadata
+
+If the output folder is in OneDrive, it auto-syncs to SharePoint — making transcripts available to M365 Copilot, Azure AI Search, and custom AI agents.
 
 ```
-Teams Meeting (transcription enabled)
+Download .vtt from Teams (3 clicks)
        ↓
-Graph API: fetch VTT transcript
+Drop into ~/OneDrive/TranscriptInbox/
        ↓
-Parse VTT → structured Markdown with YAML frontmatter
+transcript-export detects → parses VTT → Markdown
        ↓
-Upload to SharePoint doc library
+Output to ~/OneDrive/Transcripts/ (auto-syncs to SharePoint)
        ↓
-Available for M365 Copilot, Azure AI Search, custom AI agents
+M365 Copilot / AI workflows consume it
 ```
 
 ## Prerequisites
 
 - **Node.js 20+**
-- **Transcription enabled** on the target meetings (Teams meeting options or admin policy)
-- You must be the **organizer or participant** of the target meetings
-
-> **No app registration required.** This tool uses the Microsoft Graph PowerShell well-known client ID — a first-party Microsoft app pre-registered in every M365 tenant. Authentication uses device-code flow with your own M365 credentials.
+- That's it. No API keys, no app registration, no admin consent.
 
 ## Setup
 
-### 1. Configure
+```bash
+git clone https://github.com/jnscnn/transcript-export.git
+cd transcript-export
+npm install
+```
+
+Create your inbox and output folders (ideally inside your synced OneDrive):
 
 ```bash
-cp config.example.json config.json
+mkdir "$HOME/OneDrive - Microsoft/TranscriptInbox"
+mkdir "$HOME/OneDrive - Microsoft/Transcripts"
 ```
 
-Edit `config.json` with your tenant ID, SharePoint site info, and target meetings. Your tenant ID is `72f988bf-86f1-41af-91ab-2d7cd011db47` for Microsoft corporate.
+## Usage
 
-### 2. Discover Meeting IDs
+### Watch Mode (continuous)
+
+Watches the inbox folder and auto-converts new transcripts as they appear:
 
 ```bash
-npx tsx src/index.ts list-meetings -c config.json
+npx tsx src/index.ts watch \
+  --inbox "$HOME/OneDrive - Microsoft/TranscriptInbox" \
+  --output "$HOME/OneDrive - Microsoft/Transcripts"
 ```
 
-This lists your recent online meetings with their Graph API meeting IDs. Copy the IDs for the meetings you want to track into your `config.json`.
+### Convert Mode (one-shot)
 
-### 3. Run
+Processes all pending files in the inbox and exits:
 
 ```bash
-# First run — will prompt for device-code authentication
-npx tsx src/index.ts -c config.json
-
-# Dry run — show what would be processed without uploading
-npx tsx src/index.ts -c config.json --dry-run
-
-# Silent mode — uses cached token, suitable for scheduled execution
-npx tsx src/index.ts -c config.json --silent
+npx tsx src/index.ts convert \
+  --inbox "$HOME/OneDrive - Microsoft/TranscriptInbox" \
+  --output "$HOME/OneDrive - Microsoft/Transcripts"
 ```
 
-## Config File
+### Single File
 
-See `config.example.json` for the full template. Key sections:
+Convert a specific transcript file:
 
-```jsonc
-{
-  "auth": {
-    "tenantId": "your-tenant-id",
-    "tokenCachePath": "~/.transcript-export/token-cache.json"
-  },
-  "sharepoint": {
-    "siteId": "contoso.sharepoint.com,site-guid,web-guid",
-    "driveId": "drive-id-from-graph-api",
-    "basePath": "/Transcripts"
-  },
-  "meetings": [
-    {
-      "name": "Weekly Standup",
-      "meetingId": "MSoxMjM0NTY3...",
-      "organizerId": "organizer-user-guid",
-      "outputFolder": "Weekly-Standup"
-    }
-  ]
-}
+```bash
+npx tsx src/index.ts convert \
+  --file "Weekly Standup-20260310_100000-Meeting Transcript.vtt" \
+  --output ./Transcripts
 ```
 
-### Finding your SharePoint site ID and drive ID
+### Options
 
-Use the [Graph Explorer](https://developer.microsoft.com/en-us/graph/graph-explorer) to find these:
+| Flag | Description |
+|------|-------------|
+| `-i, --inbox <dir>` | Inbox folder (default: `./TranscriptInbox`) |
+| `-o, --output <dir>` | Output folder (default: `./Transcripts`) |
+| `-f, --file <path>` | Convert a single file |
+| `--no-move` | Don't move processed files to `/processed/` |
+| `-h, --help` | Show help |
 
-```
-GET https://graph.microsoft.com/v1.0/sites/{your-sharepoint-domain}:/sites/{site-name}
-```
+## How to Download Transcripts from Teams
 
-The response includes `id` (site ID). Then get the document library drive:
+1. Open the meeting chat in Teams
+2. Click on the transcript (or find it in the meeting recap)
+3. Click **"..."** (more options) → **"Download"**
+4. Save the `.vtt` file to your inbox folder
 
-```
-GET https://graph.microsoft.com/v1.0/sites/{siteId}/drives
-```
-
-## Scheduling (Windows Task Scheduler)
-
-Run the tool automatically every 2 hours during business hours:
-
-```powershell
-$action = New-ScheduledTaskAction `
-  -Execute "npx" `
-  -Argument "tsx src/index.ts -c config.json --silent" `
-  -WorkingDirectory "C:\path\to\transcript-export"
-
-$trigger = New-ScheduledTaskTrigger `
-  -Daily -At "8:00AM" `
-  -RepetitionInterval (New-TimeSpan -Hours 2) `
-  -RepetitionDuration (New-TimeSpan -Hours 12)
-
-Register-ScheduledTask -TaskName "TranscriptExport" -Action $action -Trigger $trigger
-```
-
-> **Important:** Run the tool interactively once first (`npx tsx src/index.ts -c config.json`) to complete the device-code authentication. The cached refresh token is then used for silent scheduled runs.
+For meetings you organize, transcripts are also available in your OneDrive `/Recordings` folder.
 
 ## Output Format
 
-Each transcript is saved as a Markdown file with YAML frontmatter:
+Each transcript becomes a Markdown file with YAML frontmatter:
 
 ```markdown
 ---
 meeting: "Weekly Standup"
 date: 2026-03-10
-organizer: jane.smith@contoso.com
 attendees: [Jane Smith, John Doe, Alice Johnson]
 speakers: [Jane Smith, John Doe, Alice Johnson]
 ---
 
-# Weekly Standup — Monday, March 10, 2026
+# Weekly Standup — Tuesday, March 10, 2026
 
-**Date:** Monday, March 10, 2026, 10:00 AM – 10:30 AM
-**Organizer:** jane.smith@contoso.com
+**Date:** Tuesday, March 10, 2026, 10:00 AM
 **Attendees:** Jane Smith, John Doe, Alice Johnson
 
 ---
@@ -154,17 +126,24 @@ Sure, I have a quick update on the project.
 *Auto-generated transcript. Processed 2026-03-10T14:00:00Z.*
 ```
 
-The YAML frontmatter makes files machine-readable for downstream AI workflows.
+The YAML frontmatter makes files machine-parseable for downstream AI workflows.
+
+## Supported Formats
+
+| Format | Source | Notes |
+|--------|--------|-------|
+| `.vtt` (WebVTT) | Teams transcript download | Primary format, includes speaker tags |
+| `.docx` | Teams transcript export | Parsed via mammoth, speaker/timestamp extraction |
 
 ## Downstream AI Workflows
 
-Once Markdown transcripts land in SharePoint:
+Once Markdown transcripts land in SharePoint (via OneDrive sync):
 
 | Workflow | How |
 |----------|-----|
 | **M365 Copilot** | Automatic — Copilot indexes SharePoint content for chat grounding |
 | **Azure AI Search** | Index the SharePoint library for RAG pipelines |
-| **Meeting summaries** | Add an AI layer to this tool (see Future section) |
+| **Meeting summaries** | Feed markdown to an LLM for summarization |
 | **Action items** | Parse transcripts with an LLM to extract tasks |
 
 ## Development
@@ -174,9 +153,3 @@ npm install
 npm test          # Run unit tests (vitest)
 npm run build     # Compile TypeScript
 ```
-
-## Important Notes
-
-- **Metered API:** The Graph transcript API is a [metered API](https://learn.microsoft.com/en-us/graph/teams-licenses#payment-models-for-meeting-apis). There's a seeded capacity included with M365 licenses, but high-volume usage may incur costs. For 1–5 recurring meetings, usage should stay within the free tier.
-- **Transcript delay:** Transcripts aren't available instantly after a meeting ends. There's typically a 5–15 minute processing delay. The 2-hour polling cadence handles this comfortably.
-- **Token expiry:** MSAL refresh tokens are long-lived but can expire after extended inactivity (~90 days). If scheduled runs start failing, run interactively once to re-authenticate.
