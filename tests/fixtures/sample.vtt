@@ -1,0 +1,34 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:05.230
+<v Jane Smith>Good morning everyone. Let's get started with our weekly standup.</v>
+
+00:00:05.230 --> 00:00:12.450
+<v John Doe>Sure. I finished the API migration yesterday. All tests are passing.</v>
+
+00:00:12.450 --> 00:00:18.780
+<v Jane Smith>Great work. Any blockers?</v>
+
+00:00:18.780 --> 00:00:28.100
+<v John Doe>One thing — the staging environment is still on the old config. I need DevOps to update it.</v>
+
+00:00:28.100 --> 00:00:35.500
+<v Alice Johnson>I can help with that. I'll open a ticket and get it done today.</v>
+
+00:00:35.500 --> 00:00:42.200
+<v Jane Smith>Perfect. Alice, any updates on the customer dashboard?</v>
+
+00:00:42.200 --> 00:00:55.800
+<v Alice Johnson>Yes, the new charts are ready for review. I'll share the PR after this call. One thing to note — we need to decide on the color scheme before launch.</v>
+
+00:00:55.800 --> 00:01:02.300
+<v Jane Smith>OK let's discuss that in our design sync. Anything else?</v>
+
+00:01:02.300 --> 00:01:08.100
+<v John Doe>Nothing from me.</v>
+
+00:01:08.100 --> 00:01:12.500
+<v Alice Johnson>All good here.</v>
+
+00:01:12.500 --> 00:01:18.000
+<v Jane Smith>Great. Let's wrap up. Have a productive day everyone!</v>

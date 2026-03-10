@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "auth": {
+    "clientId": "YOUR_APP_CLIENT_ID",
+    "tenantId": "YOUR_TENANT_ID",
+    "tokenCachePath": "~/.transcript-export/token-cache.json"
+  },
+  "sharepoint": {
+    "siteId": "contoso.sharepoint.com,site-guid,web-guid",
+    "driveId": "DRIVE_ID_FROM_GRAPH_API",
+    "basePath": "/Transcripts"
+  },
+  "meetings": [
+    {
+      "name": "Weekly Standup",
+      "meetingId": "MSoxMjM0NTY3...",
+      "organizerId": "organizer-user-guid",
+      "outputFolder": "Weekly-Standup"
+    }
+  ],
+  "watermarkPath": "~/.transcript-export/watermarks.json"
+}

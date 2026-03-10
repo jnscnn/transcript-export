@@ -1,0 +1,29 @@
+{
+  "name": "transcript-export",
+  "version": "1.0.0",
+  "description": "Export Teams meeting transcripts to structured Markdown and upload to SharePoint",
+  "type": "module",
+  "bin": {
+    "transcript-export": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@azure/msal-node": "^2.16.0",
+    "@microsoft/microsoft-graph-client": "^3.0.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
